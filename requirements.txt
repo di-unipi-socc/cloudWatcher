@@ -1,0 +1,9 @@
+# machines.py
+fabric
+python-openstackclient
+
+# cloudWatcher manager
+pymongo[srv]
+iperf3
+ping3
+requests

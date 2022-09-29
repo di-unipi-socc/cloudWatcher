@@ -1,0 +1,421 @@
+{
+    "machines": {
+        "cw-probe-small-20": {
+            "image": "Ubuntu 20.04 - GARR",
+            "specs": {
+                "vcpus": 1,
+                "ram": 6000,
+                "disk": 20 
+            },
+            "key_name": "socc",
+            "network": "default",
+            "security_groups": [
+                "default",
+                "CloudWatcher-sec-group"
+            ],
+            "scripts": {
+                "setup": [
+                    "sudo apt update",
+                    "sudo apt -f install -y",
+                    "sudo apt update -y && sudo apt dist-upgrade -y"
+                ],
+                "probe": ["hostname"],
+                "fio": ["sudo fio --randrepeat=1 --direct=1 --gtod_reduce=1 --name=test --filename=random_read_write.fio --bs=4k --iodepth=64 --size=<SIZE> --readwrite=randrw --rwmixread=75 --output-format=json"]
+            },
+            "tasks": [
+                [
+                    {
+                        "name": "fio",
+                        "function": {
+                            "name": "fio"
+                        },
+                        "aggregate": {
+                            "name": "aggregate_fio"
+                        },
+                        "args": "10MB",
+                        "setup": [
+                            "sudo apt install fio -y"
+                        ]
+                    }
+                ],
+                [
+                    {
+                        "name": "network",
+                        "function": {
+                            "name": "probe_network",
+                            "slo":{
+                                "latency":{
+                                    "max": [[0.3, "WARNING"], [0.6, "ATTENTION"], [1, "CRITICAL"]]
+                                },
+                                "bandwidth":{
+                                    "upload":{
+                                        "min": [[500000000, "CRITICAL"], [800000000, "WARNING"]]
+                                    },
+                                    "download":{
+                                        "min": [[500000000, "CRITICAL"], [800000000, "WARNING"]]
+                                    }
+                                }
+                            }
+                        },
+                        "aggregate": {
+                            "name": "aggregate_network",
+                            "slo":{
+                                "latency":{
+                                    "failed": {
+                                        "max": 0
+                                    }
+                                },
+                                "bandwidth":{
+                                    "upload":{
+                                        "failed": {
+                                            "max": 0
+                                        }
+                                    },
+                                    "download":{
+                                        "failed": {
+                                            "max": 0
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "setup": [
+                            "sudo apt install -y iperf3",
+                            "sudo iperf3 -s -D"
+                        ]
+                    }
+                ],
+                [
+                    {
+                        "name": "probe",
+                        "function": {
+                            "name": "exec_script",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": [[61, "WARNING"], [70, "CRITICAL"]]
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "aggregate": {
+                            "name": "aggregate_script",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": 61
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "args": "probe"
+                    }
+                ],
+                [
+                    {
+                        "name": "remake",
+                        "function": {
+                            "name": "remake",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": 61
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "aggregate": {
+                            "name": "aggregate_remake",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": 61
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "args": 0.5
+                    }
+                ]
+            ]
+        },
+        "cw-probe-small-22": {
+            "image": "Ubuntu 22.04 - GARR",
+            "specs": {
+                "vcpus": 1,
+                "ram": 6000,
+                "disk": 20 
+            },
+            "key_name": "socc",
+            "network": "default",
+            "security_groups": [
+                "default",
+                "CloudWatcher-sec-group"
+            ],
+            "scripts": {
+                "setup": [
+                    "sudo apt update",
+                    "sudo apt -f install -y",
+                    "sudo apt update -y && sudo apt dist-upgrade -y"
+                ],
+                "probe": ["hostname"],
+                "fio": ["sudo fio --randrepeat=1 --direct=1 --gtod_reduce=1 --name=test --filename=random_read_write.fio --bs=4k --iodepth=64 --size=<SIZE> --readwrite=randrw --rwmixread=75 --output-format=json"]
+            },
+            "tasks": [
+                [
+                    {
+                        "name": "fio",
+                        "function": {
+                            "name": "fio"
+                        },
+                        "aggregate": {
+                            "name": "aggregate_fio"
+                        },
+                        "args": "10MB",
+                        "setup": [
+                            "sudo apt install fio -y"
+                        ]
+                    }
+                ],
+                [
+                    {
+                        "name": "network",
+                        "function": {
+                            "name": "probe_network",
+                            "slo":{
+                                "latency":{
+                                    "max": [[0.3, "WARNING"], [0.6, "ATTENTION"], [1, "CRITICAL"]]
+                                },
+                                "bandwidth":{
+                                    "upload":{
+                                        "min": [[500000000, "CRITICAL"], [800000000, "WARNING"]]
+                                    },
+                                    "download":{
+                                        "min": [[500000000, "CRITICAL"], [800000000, "WARNING"]]
+                                    }
+                                }
+                            }
+                        },
+                        "aggregate": {
+                            "name": "aggregate_network",
+                            "slo":{
+                                "latency":{
+                                    "failed": {
+                                        "max": 0
+                                    }
+                                },
+                                "bandwidth":{
+                                    "upload":{
+                                        "failed": {
+                                            "max": 0
+                                        }
+                                    },
+                                    "download":{
+                                        "failed": {
+                                            "max": 0
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "setup": [
+                            "sudo apt install -y iperf3",
+                            "sudo iperf3 -s -D"
+                        ]
+                    }
+                ],
+                [
+                    {
+                        "name": "probe",
+                        "function": {
+                            "name": "exec_script",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": [[61, "WARNING"], [70, "CRITICAL"]]
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "aggregate": {
+                            "name": "aggregate_script",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": 61
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "args": "probe"
+                    }
+                ],
+                [
+                    {
+                        "name": "remake",
+                        "function": {
+                            "name": "remake",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": 61
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "aggregate": {
+                            "name": "aggregate_remake",
+                            "slo":{
+                                "success": {
+                                    "min": 100
+                                },
+                                "time": {
+                                    "max": 61
+                                },
+                                "iterations": {
+                                    "max":1
+                                },
+                                "#errors": {
+                                    "total": {
+                                        "max": 0
+                                    }
+                                }
+                            }
+                        },
+                        "args": 0.5
+                    }
+                ]
+            ]
+        },
+        "cw-manager": {
+            "image": "cloudWatcher-template",
+            "flavor": "d1.small",
+            "key_name": "socc",
+            "network": "default",
+            "security_groups": [
+                "default",
+                "CloudWatcher-sec-group"
+            ],
+            "scripts": {
+                "exec-setup": [
+                    "sudo apt update",
+                    "sudo apt -f install -y",
+                    "sudo apt update -y && sudo apt dist-upgrade -y",
+                    "sudo apt install -y iperf3",
+                    "sudo apt remove python-pip-whl",
+                    "sudo apt install -y python3-pip",
+                    "sudo pip install --upgrade pip",
+                    "sudo git clone https://<GIT_USERNAME>:<GIT_TOKEN>@github.com/<GIT_USERNAME>/machines.git",
+                    "sudo git config --global --add safe.directory <BASEPATH>",
+                    "sudo git config --global user.email '<GIT_EMAIL>'",
+                    "sudo git config --global user.name '<GIT_USERNAME>'",
+                    "cd <BASEPATH> && sudo pip install -r requirements.txt"
+                ],
+                "start": ["cd <BASEPATH> && sudo git pull && sudo python3 -u cloudWatcher.py <VERBOSE-OPTION> <RESET-OPTION> -c <CONFIG-FILE> manager -id <MANAGER> | sudo tee -a manager.log"]
+            }
+        }
+    },
+    "keypairs": {
+        "socc": {
+            "public_key": "[PUBLIC_KEY]",
+            "key_filename": "[PATH_TO_PEM_FILE]",
+            "user": "ubuntu"
+        }
+    },
+    "security_groups": {
+        "CloudWatcher-sec-group": {
+            "description": "CloudWatcher security group",
+            "rules": [
+                {
+                    "protocol": "TCP",
+                    "port_range_min": 22,
+                    "port_range_max": 22,
+                    "remote_ip_prefix": "0.0.0.0/0", 
+                    "direction": "ingress",
+                    "ethertype": "IPv4"
+                },
+                {
+                    "protocol": "ICMP",
+                    "remote_ip_prefix": "0.0.0.0/0", 
+                    "direction": "ingress",
+                    "ethertype": "IPv4"
+                },
+                {
+                    "protocol": "TCP",
+                    "remote_ip_prefix": "0.0.0.0/0", 
+                    "direction": "ingress",
+                    "ethertype": "IPv4"
+                }
+            ]
+        }
+    },
+    "tokens":{
+        "<GIT_USERNAME>":"[GIT_USER]",
+        "<GIT_TOKEN>":"[GIT_TOKEN]",
+        "<GIT_EMAIL>":"[GIT_EMAIL]",
+        "<BASEPATH>": "/home/ubuntu/cloudWatcher"
+    }
+}
