@@ -6,7 +6,7 @@ cloudWatcher aims at monitoring customised health metrics (e.g., the availabilit
 
 ### Managers & Probes
 
-cloudWatcher relies on a set of distributed agents, called Managers, deployed in each DC to be monitored. Managers exploit some dedicated Virtual Machines, called Probes, that are deployed across all DCs and periodically queried by their Manager to collect data on failures and performance. Last, Probes run in different types, according to the VM types available in each Cloud datacentre (e.g. tiny, medium, large) the OS they run (e.g. Ubuntu, CentOS), and their purpose (e.g. backup, database).
+cloudWatcher relies on a set of distributed agents, called Managers, deployed in each DC to be monitored. Managers exploit some dedicated Virtual Machines, called Probes, that are deployed across all DCs and periodically queried by their Managers to collect data on failures and performance. Last, Probes run in different types, according to the VM types available in each Cloud datacentre (e.g. tiny, medium, large) the OS they run (e.g. Ubuntu, CentOS), and their purpose (e.g. backup, database).
 
 ### Tasks
 
@@ -14,12 +14,12 @@ Interactions between a Manager and a Probe occur through Tasks. A Task is a part
 
 Each Manager periodically starts a monitoring step. At each monitoring step, the Manager performs the related Tasks for each controlled Probe. The sequence of Tasks is determined by the Probe’s type. So, the same task sequence is performed for all the Probes of the same type. For each Task, the execution is divided into two phases.
  
- - Data Collection: the Manager execute the Task activity, according to a data collection function, collecting all the relevant information (e.g., performance, faults);
+ - Data Collection: the Manager executes the Task activity, according to a data collection function, collecting all the relevant information (e.g., performance, faults);
  - Data Aggregation: the collected data are aggregated based on a Task’s aggregation policy.
 
 ## cloudWatcher's Implementation
 
-cloudWatcher is implemented in python3 leveraging the Fabric and OpenStack SDK libraries that enable the interactions through SSH between machines and with the Clouds’ services.
+cloudWatcher is implemented in python3 leveraging the Fabric and OpenStack SDK libraries that enable interactions through SSH between machines and with the Clouds’ services.
 
 cloudWatcher features a declarative, fault-tolerant and performance-oriented interface to the functionalities offered by Fabric and OpenStack SDK (i.e., machines.py). Such an interface has been designed to make available high-level, declarative operations for managing Virtual Machines (e.g., running a script, creating and initialising a VM). At the end of the execution of each function of the interface, a Report object is returned. It contains information on the possible errors encountered during its execution, the execution time and the number of iterations necessary to complete it.
 
@@ -35,14 +35,14 @@ To use cloudWatcher it is simply required to provide three configuration files.
 
 ### machine.json
 
-In the machines.json file are defined, declaratively, the information about the Managers and the Probes' types, as well as on key pairs and security groups exploited by cloudWatcher and its Managers and Probes. Both the key pairs and the security groups declared in this file are created or overwritten, in each monitored Cloud, at each starting of cloudWatcher.
+In the machines.json file are defined, declaratively, the information about the Managers and the Probes' types, as well as on key pairs and security groups exploited by cloudWatcher and its Managers and Probes. Both the key pairs and the security groups declared in this file are created or overwritten, in each monitored Cloud, at each start of cloudWatcher.
 
-In the machines.json file it is possible to declare the Probes' types.  For each Probe type, the VM
-flavour (the flavor can be declared through the key flavour with the name of that flavour or through specs in which the required hardware capailities are defined) and OS, as well as the local files to export to the remote machine (in the form of the path of the local file in the Manager file system and the path of that file in the Probe), the access key and the security groups are defined. Furthermore, for each type, a list of scenarios is declared, where each scenario is a list of Tasks. Tasks within a scenario are executed in parallel, while the scenarios, instead, are executed sequentially. Before moving from one scenario to the next, indeed, all the Tasks of the previous scenario must be completed. Finally, for each Task, it is possible to define some Service Level Objectives both for the data collected by the execution of a task and for the aggregated ones. SLOs can be declared by specifying the maximum or minimum value allowed (e.g., the maximum latency, the minimum success ratio for a Cloud service operation, the maximum number of tolerated faults) beyond which there is a violation. It is also possible to specify a series of threshold values as SLO, associating each of them with a label indicating the severity of the violation.
+In the machines.json file, it is possible to declare the Probes' types.  For each Probe type, the VM
+flavour (the flavour can be declared through the key flavour with the name of that flavour or through specs in which the required hardware capabilities are defined) and OS, as well as the local files to export to the remote machine (in the form of the path of the local file in the Manager file system and the path of that file in the Probe), the access key and the security groups, are defined. Furthermore, for each type, a list of scenarios is declared, where each scenario is a list of Tasks. Tasks within a scenario are executed in parallel, while the scenarios, instead, are executed sequentially. Before moving from one scenario to the next, indeed, all the Tasks of the previous scenario must be completed. Finally, for each Task, it is possible to define some Service Level Objectives both for the data collected by the execution of a task and for the aggregated ones. SLOs can be declared by specifying the maximum or minimum value allowed (e.g., the maximum latency, the minimum success ratio for a Cloud service operation, and the maximum number of tolerated faults) beyond which there is a violation. It is also possible to specify a series of threshold values as SLO, associating each of them with a label indicating the severity of the violation.
 
-For each Task, we delcare the data collection function (function), the aggreagtion policy (aggregation) boyh specifying the name of the related python function (defined in the tasks.py file) and possibly a dictionary of SLOs. Finally, for each Task, it is also possible to provide some optional arguments to pass in input to the data collection function and a script, to be executed during the VM setup phase, containing the commands necessary for allowing the Task execution.
+For each Task, we declare the data collection function (function), and the aggregation policy (aggregation) both specifying the name of the related python function (defined in the tasks.py file) and possibly a dictionary of SLOs. Finally, for each Task, it is also possible to provide some optional arguments to pass in input to the data collection function and a script, to be executed during the VM setup phase, containing the commands necessary for allowing the Task execution.
 
-Generally speaking, a data collection function takes as input the data of the target Probe machine (i.e., an OpenStack Server object) and a series of possible optional arguments and outputs a dictionary representing the collected data. While, the aggregation policy is defined by a function that takes as input a list of the dictionaries
+Generally speaking, a data collection function takes as input the data of the target Probe machine (i.e., an OpenStack Server object) and a series of possible optional arguments and outputs a dictionary representing the collected data. While the aggregation policy is defined by a function that takes as input a list of the dictionaries
 obtained in output from the execution of the associated data collection function on all the Probes of the same type and in the same DC and outputs a single dictionary that aggregates the obtained data, possibly adding, removing or extending the existing fields.
 
 Among the other information we can notice inside the Probe type, we have a set of named scripts (e.g., setup). In this way, it is possible to request the execution of a script in the VM only using its name.
@@ -67,9 +67,9 @@ Finally, it is only required to type the following command to start cloudWatcher
 python3 cloudWatcher.py -r [-v/-vv]
 ```
 
-with optionally -v or -vv to have a verbose or very verbose output.
+with optionally -v or -vv to have verbose or very verbose output.
 
-Since cloudWatcher.py needs to work in background it is suggested to run it on a screen. We also suggest to store the output in a log file, since it may contains useful information on possible faults
+Since cloudWatcher.py needs to work in the background it is suggested to run it on a screen. We also suggest storing the output in a log file, since it may contain useful information on possible faults
 
 
 ```bash
