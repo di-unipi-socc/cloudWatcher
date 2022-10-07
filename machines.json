@@ -7,7 +7,7 @@
                 "ram": 6000,
                 "disk": 20 
             },
-            "key_name": "socc",
+            "key_name": "cw-key",
             "network": "default",
             "security_groups": [
                 "default",
@@ -182,7 +182,7 @@
                 "ram": 6000,
                 "disk": 20 
             },
-            "key_name": "socc",
+            "key_name": "cw-key",
             "network": "default",
             "security_groups": [
                 "default",
@@ -351,16 +351,16 @@
             ]
         },
         "cw-manager": {
-            "image": "cloudWatcher-template",
+            "image": "Ubuntu 20.04 - GARR",
             "flavor": "d1.small",
-            "key_name": "socc",
+            "key_name": "cw-key",
             "network": "default",
             "security_groups": [
                 "default",
                 "CloudWatcher-sec-group"
             ],
             "scripts": {
-                "exec-setup": [
+                "setup": [
                     "sudo apt update",
                     "sudo apt -f install -y",
                     "sudo apt update -y && sudo apt dist-upgrade -y",
@@ -379,7 +379,7 @@
         }
     },
     "keypairs": {
-        "socc": {
+        "cw-key": {
             "public_key": "[PUBLIC_KEY]",
             "key_filename": "[PATH_TO_PEM_FILE]",
             "user": "ubuntu"
