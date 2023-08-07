@@ -3,7 +3,10 @@ fabric
 python-openstackclient
 
 # cloudWatcher manager
+pyopenssl
 pymongo[srv]
+wheel
 iperf3
 ping3
 requests
+influxdb

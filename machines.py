@@ -196,6 +196,7 @@ def find_cloud(latitude, longitude, *, verbose=VERBOSE):
                     min_cloud = c
     return min_cloud
 
+
 def get_servers(by_metadata={}, clouds=None, tokens={}, *, verbose=VERBOSE):
     connect_clouds(clouds, verbose=verbose)
     clouds = get_clouds(verbose=verbose) if clouds is None else ([clouds] if type(clouds) is str else clouds)
@@ -297,6 +298,9 @@ def get_server_ip(server_name, cloud=None, *, verbose=VERBOSE):
     return get_ip(server)
 
 def delete_server(conn, server, sleep=int(config["TUNING"]["wait_after_delete"]), max_it=int(config["TUNING"]["max_it_vm_delete"]), *, verbose=VERBOSE):
+    n = conn.delete_unattached_floating_ips()
+    debug_print(f"* {n} IPs released [delete_server]", verbose=verbose)
+
     errors = []
     for i in range(max_it):
         try:
@@ -320,7 +324,11 @@ def remove_machine(server_name, cloud=None, sleep=int(config["TUNING"]["wait_aft
         if cloud is None:
             return report(False, None, [], f"Server {server_name} cloud not found", 0, 0)
     if cloud in get_clouds(verbose=verbose):
-        server = conns[cloud].compute.find_server(server_name)
+        conn = conns[cloud]
+        n = conn.delete_unattached_floating_ips()
+        debug_print(f"* {n} IPs released on {cloud} [remove_machine]", verbose=verbose)
+
+        server = conn.compute.find_server(server_name)
         if server:
             return delete_server(conns[cloud], server, sleep, max_it, verbose=verbose)
         else:
@@ -380,6 +388,9 @@ def create_server(name, type, cloud, metadata={}, heuristic="cpu-ram-disk", max_
     it = 0
     if cloud is not None and cloud in get_clouds(verbose=verbose):
         conn = conns[cloud]
+        n = conn.delete_unattached_floating_ips()
+        debug_print(f"* {n} IPs released on {cloud} [create_server]", verbose=verbose)
+
         s = get_server(name, cloud, verbose=False)
         print("Checking if server already exists", name, s)
         if s is not None:
@@ -420,7 +431,7 @@ def create_server(name, type, cloud, metadata={}, heuristic="cpu-ram-disk", max_
         while vm is None and it < max_attempts:
             try:
                 s = get_server(name, cloud, verbose=False)
-                print("1Checking if server already exists", name, s)
+                print("Checking if server already exists", name, s)
                 if s is not None:
                     debug_print(f"Attention: Server {name} already exists in {cloud}", verbose=verbose)
                     print("Deleted",delete_server(conn, s, verbose=verbose))
@@ -435,7 +446,8 @@ def create_server(name, type, cloud, metadata={}, heuristic="cpu-ram-disk", max_
                                 meta=meta,
                                 wait=True, 
                                 auto_ip=True,
-                                timeout=timeout
+                                timeout=timeout,
+                                reuse_ips=True
                                 )
                 end = time.time()
                 debug_print(f"Server {name} created", verbose=verbose)
@@ -666,7 +678,7 @@ def exec_script_by_ip(ip, script, user, key_filename, tokens={}, hide=True, time
                     raise exc
             end = time.time()
             debug_print("Script executed on {} ({})".format(server_name, ip), verbose=verbose)
-            return report(status=True, data=str(last), errors=errors, msg=f"Script executed on {server_name} ({ip})", it=it+1, t=end-start) #TODO: last to dict?
+            return report(status=True, data=str(last), errors=errors, msg=f"Script executed on {server_name} ({ip})", it=it+1, t=end-start)
         except Exception as e:
             debug_print(f"Error connecting to {server_name} ({ip}): {e}", verbose=verbose)
             errors.append(str(e))
@@ -1054,18 +1066,42 @@ def update_machines(metadata, by_metadata={}, clouds=None, tokens={}, sleep=int(
     
     return results
 
-def setup_clouds(clouds, ips=0, *, verbose=VERBOSE):
+def clean_clouds(clouds, verbose=VERBOSE):
     if clouds is not None:
         if type(clouds) is str:
             clouds = [clouds]
+        global conns
+        connect_clouds(clouds, verbose=verbose)
+        for cloud in clouds:
+            conn = conns[cloud]
+            for sg,info in SECGROUPS_PARADIGMS.items():
+                try:
+                    debug_print("Deleting security group {} on cloud {}".format(sg, cloud), verbose=verbose)
+                    if conn.get_security_group(sg) is not None:
+                        conn.delete_security_group(sg)
+                except Exception as e:
+                    debug_print("Error deleting security group {} on cloud {}: {}".format(sg, cloud, e), verbose=verbose)
+            for key,info in KEYPAIRS_PARADIGMS.items():
+                debug_print("Deleting keypairs on cloud {}".format(cloud), verbose=verbose)
+                if conn.get_keypair(key) is not None:
+                    conn.delete_keypair(key)
+            debug_print("Releasing IPs", verbose=verbose)
+            n = conn.delete_unattached_floating_ips()
+            debug_print(f"* {n} IPs released on {cloud} [clean_clouds]", verbose=verbose)
+
+
+def setup_clouds(clouds, ips=0, *, verbose=VERBOSE):
+    clean_clouds(clouds, verbose=VERBOSE)
+    if clouds is not None:
+        if type(clouds) is str:
+            clouds = [clouds]
+        global conns
         connect_clouds(clouds, verbose=verbose)
         for cloud in clouds:
             conn = conns[cloud]
             for sg,info in SECGROUPS_PARADIGMS.items():
                 try:
                     debug_print("Creating security group {} on cloud {}".format(sg, cloud), verbose=verbose)
-                    if conn.get_security_group(sg) is not None:
-                        conn.delete_security_group(sg)
                     conn.create_security_group(sg, info["description"])
                     for rule in info["rules"]:
                         if "port_range_min" in rule and "port_range_max" in rule:
@@ -1087,21 +1123,9 @@ def setup_clouds(clouds, ips=0, *, verbose=VERBOSE):
 
             for key,info in KEYPAIRS_PARADIGMS.items():
                 debug_print("Creating keypair {} on cloud {}".format(key, cloud), verbose=verbose)
-                if conn.get_keypair(key) is not None:
-                    conn.delete_keypair(key)
                 conn.create_keypair(key, info["public_key"])
 
-            debug_print(f"Allocating {ips} floating IPs on cloud {cloud}", verbose=verbose)
-            n = 0
-            for _ in range(ips):
-                try:
-                    conn.create_floating_ip()
-                    n+=1
-                except:
-                    pass
-            debug_print(f"{n} floating IPs allocated on cloud {cloud}", verbose=verbose)
-            if verbose:
-                print()
+
 
 def status_clouds(clouds, metadata={}, *, verbose=VERBOSE):
     if clouds is not None:
