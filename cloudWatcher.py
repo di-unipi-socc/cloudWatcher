@@ -1,3 +1,5 @@
+from distutils.log import debug
+import sys
 import time
 import json
 import random
@@ -7,6 +9,7 @@ import requests
 import configparser
 
 from datetime import datetime
+from influxdb import InfluxDBClient
 
 import machines
 import tasks
@@ -29,6 +32,25 @@ VERBOSE = True if VERY_VERBOSE else VERBOSE
 client = pymongo.MongoClient("MONGODB_URL")
 DB = client.cloudWatcher
 COLLECTION = DB.report
+
+# instantiate influxdb client
+in_config = config["INFLUXDB"]
+influxdb_client = InfluxDBClient(in_config["host"], in_config["port"], in_config["username"], in_config["password"], in_config["database"])
+
+
+class InfluxDBPoint:
+    "A class representing a measurement point, which can yield an InfluxDB compatible JSON"
+    def __init__(self, fields, tags):
+        self.tags = tags
+        self.fields = fields
+        self.timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ')
+    def to_influx_point(self):
+        r = {}
+        r['tags'] = self.tags
+        r['fields'] = self.fields
+        r['time'] = self.timestamp
+        r['measurement'] = 'measurement'
+        return r
 
 def debug_print(*args, **kwargs):
     if kwargs.get("verbose", None) is None:
@@ -87,8 +109,9 @@ def reset(clouds=json.loads(cw_config["clouds"]), *, verbose=VERBOSE, very_verbo
     }
 
     report = machines.remove_all_machines(metadata, clouds, verbose=very_verbose)
+    report.append(machines.clean_clouds(clouds, verbose=very_verbose))
 
-    debug_print("Machines removed", verbose=verbose)
+    debug_print("Machines removed, Floating IPs released, Security groups removed, Keys removed", verbose=verbose)
     return report
 
 def setup_managers(manager_type="cw-manager", clouds=json.loads(cw_config["clouds"]), count=int(cw_config["managers"]), *, verbose=VERBOSE, very_verbose=VERY_VERBOSE, name=None):
@@ -270,6 +293,96 @@ def probe(machine, *, verbose=VERBOSE, very_verbose=VERY_VERBOSE):
 
     return results
 
+def extract_metrics(report, verbose=VERBOSE, very_verbose=VERY_VERBOSE):
+    "extract relevant information from the given report, to be inserted in InfluxDB"
+    if not 'reports' in report:
+        return []
+ 
+    # find the origin of the metrics and the region to which it belongs
+    origin = report['origin']
+    origin_cloud = "unknown"
+    for cloud in clouds:
+        if cloud in origin:
+            origin_cloud = cloud
+ 
+    response = []
+    for cloud in clouds:
+        if not cloud in report['reports']:
+            continue
+        for cwprobe in report['reports'][cloud].keys():
+            for cwkey, cwvalue in report['reports'][cloud][cwprobe].items():
+                if not cwvalue:
+                    continue
+                tags = {
+                    'origin_cloud': origin_cloud,
+                    'destination_cloud': cloud,
+                    'metric': cwkey
+                }
+                fields = {}
+                if cwkey == 'fio':
+                    debug_print("**************** FIO", verbose=verbose)
+                    try:
+                        fields['read_iops_mean'] = cwvalue['jobs']['read']['iops_mean']
+                        fields['read_iops_max'] = cwvalue['jobs']['read']['iops_max']
+                        fields['read_iops_min'] = cwvalue['jobs']['read']['iops_min']
+ 
+                        fields['write_iops_mean'] = cwvalue['jobs']['write']['iops_mean']
+                        fields['write_iops_max'] = cwvalue['jobs']['write']['iops_max']
+                        fields['write_iops_min'] = cwvalue['jobs']['write']['iops_min']
+ 
+                        fields['read_bw_mean'] = cwvalue['jobs']['read']['bw_mean']
+                        fields['read_bw_max'] = cwvalue['jobs']['read']['bw_max']
+                        fields['read_bw_min'] = cwvalue['jobs']['read']['bw_min']
+ 
+                        fields['write_bw_mean'] = cwvalue['jobs']['write']['bw_mean']
+                        fields['write_bw_max'] = cwvalue['jobs']['write']['bw_max']
+                        fields['write_bw_min'] = cwvalue['jobs']['write']['bw_min']
+ 
+                        point = InfluxDBPoint(fields, tags)
+                        debug_print(point.to_influx_point(), verbose=verbose)
+                        response.append(point.to_influx_point())
+                    except KeyError:
+                        continue
+                elif cwkey == 'network':
+                    debug_print("**************** NETWORK", verbose=verbose)
+                    try:
+                        fields['latency'] = cwvalue['latency']['avg']
+                        fields['upload_bandwidth'] = cwvalue['bandwidth']['upload']['avg']
+                        fields['download_bandwidth'] = cwvalue['bandwidth']['download']['avg']
+                        point = InfluxDBPoint(fields, tags)
+                        debug_print(point.to_influx_point(), verbose=verbose)
+                        response.append(point.to_influx_point())
+                    except KeyError:
+                        continue
+                elif cwkey == 'probe':
+                    debug_print("**************** PROBE", verbose=verbose)
+                    try:
+                        fields['success'] = cwvalue['success']
+                        fields['time'] = cwvalue['time']
+                        point = InfluxDBPoint(fields, tags)
+                        debug_print(point.to_influx_point(), verbose=verbose)
+                        response.append(point.to_influx_point())
+                    except KeyError:
+                        continue
+                elif cwkey == 'remake':
+                    debug_print("**************** REMAKE", verbose=verbose)
+                    try:
+                        fields['creation_success'] = cwvalue['add']['create']['success']
+                        fields['creation_time'] = cwvalue['add']['create']['time']
+                        fields['setup_success'] = cwvalue['add']['setup']['success']
+                        fields['setup_time'] = cwvalue['add']['setup']['time']
+                        fields['first_access_success'] = cwvalue['add']['first_access']['success']
+                        fields['first_access_time'] = cwvalue['add']['first_access']['time']
+                        fields['deletion_success'] = cwvalue['delete']['success']
+                        fields['deletion_time'] = cwvalue['delete']['time']
+                        point = InfluxDBPoint(fields, tags)
+                        debug_print(point.to_influx_point(), verbose=verbose)
+                        response.append(point.to_influx_point())
+                    except KeyError:
+                        continue
+    return response
+
+
 def publish_report(report, *, verbose=VERBOSE, very_verbose=VERY_VERBOSE):
     debug_print("Publishing report", verbose=verbose)
 
@@ -282,6 +395,22 @@ def publish_report(report, *, verbose=VERBOSE, very_verbose=VERY_VERBOSE):
         COLLECTION.insert_one(report)
     except Exception as e:
         debug_print("Error inserting report: {}".format(e))
+
+    try:
+        debug_print("Inserting report in InfluxDB", verbose=verbose)
+        debug_print(report, verbose=verbose)
+        influxdb_measurement = in_config['measurement']
+        debug_print("Extracting metrics", verbose=verbose)
+        extracted_metrics = extract_metrics(report)
+        debug_print(extracted_metrics, verbose=verbose)
+        for metric in extracted_metrics:
+            metric.update({'measurement': influxdb_measurement})
+        debug_print(extracted_metrics, verbose=verbose)
+        debug_print("Writing to InfluxDB", verbose=verbose)
+        influxdb_client.write_points(extracted_metrics)
+        debug_print("Written to InfluxDB", verbose=verbose)
+    except Exception as e:
+        debug_print("Error writing to InfluxDB: {}".format(e))
 
     time.sleep(1)
 
@@ -434,6 +563,7 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", help="Verbose mode", action="store_true")
     parser.add_argument("-vv", "--very-verbose", help="Very verbose mode", action="store_true")
     parser.add_argument("-r", "--reset", help="Reset", action="store_true")
+    parser.add_argument("-cl", "--clean", help="Release Floating IPs, remove keys and security groups", action="store_true")
 
     # subparsers for commands
     subparsers = parser.add_subparsers(help="Subcommands", dest="command")
@@ -474,6 +604,12 @@ if __name__ == "__main__":
 
     else:
         debug_print("cloudWatcher starter", verbose=VERBOSE)
+        if args.clean:
+            debug_print("Cleaning...", verbose=VERBOSE)
+            reset(clouds=clouds, verbose=VERBOSE, very_verbose=VERY_VERBOSE)
+            debug_print("Cleanup completed", verbose=VERBOSE)
+            sys.exit(0)
+
         if args.reset:
             reset(clouds=clouds, verbose=VERBOSE, very_verbose=VERY_VERBOSE)
 

@@ -133,7 +133,6 @@ def aggregate_remake(ls, *, verbose=True, very_verbose=True):
         "setup":[],
         "first_access":[]
     }
-
     delete = []
     for l in ls:
         if l != {}:
@@ -195,19 +194,27 @@ def aggregate_network(ls, *, verbose=True, very_verbose=True):
             upload_failed += 1
             download_failed += 1
 
+    latency_avg = 1.0 * lat_sum / lat_count if lat_count > 0 else -1.0
+    latency_success = 100.0 - (lat_failed / len(ls) * 100)
+    bandwidth_upload_avg = 1.0 * upload_sum / upload_count if upload_count > 0 else -1.0
+    bandwidth_upload_success = 100.0 - (upload_failed / len(ls) * 100)
+    bandwidth_download_avg = 1.0 * download_sum / download_count if download_count > 0 else -1.0
+    bandwidth_download_success = 100.0 - (download_failed / len(ls) * 100)
+
+
     return {
         "latency": {
-            "avg": lat_sum / lat_count if lat_count > 0 else None,
-            "success": 100 - (lat_failed / len(ls) * 100)
+            "avg": latency_avg,
+            "success": latency_success,
         },
         "bandwidth": {
             "upload": {
-                "avg": upload_sum / upload_count if upload_count > 0 else None,
-                "success": 100 - (upload_failed / len(ls) * 100)
+                "avg": bandwidth_upload_avg,
+                "success": bandwidth_upload_success
             },
             "download": {
-                "avg": download_sum / download_count if download_count > 0 else None,
-                "success": 100 - (download_failed / len(ls) * 100)
+                "avg": bandwidth_download_avg,
+                "success": bandwidth_download_success
             }
         }
     }
