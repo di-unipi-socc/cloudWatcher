@@ -677,6 +677,7 @@ def exec_script_by_ip(ip, script, user, key_filename, tokens={}, hide=True, time
                     debug_print("Failed to connect to {} ({})".format(server_name, ip), verbose=verbose)
                     raise exc
             end = time.time()
+            vm.close()
             debug_print("Script executed on {} ({})".format(server_name, ip), verbose=verbose)
             return report(status=True, data=str(last), errors=errors, msg=f"Script executed on {server_name} ({ip})", it=it+1, t=end-start)
         except Exception as e:
@@ -935,6 +936,7 @@ def add_machine(name, type, cloud, metadata={}, tokens={}, heuristic="cpu-ram-di
                     destination = apply_tokens(destination, tokens, name, cloud)
                     c.put(source, destination)
                     file["result"] = True
+                    c.close()
                 except Exception as e:
                     file["result"] = str(e)
             debug_print("Files copied to VM {} ({})".format(name, ip), verbose=verbose)
